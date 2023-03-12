@@ -4,35 +4,27 @@ import {
   CommitDraft,
   ContentEntry,
   ENTRY_EXTENSION,
-  PATH_SCHEMA_FILE,
-  PATH_ENTRY_FOLDER,
   GitAdapter,
+  PATH_ENTRY_FOLDER,
+  PATH_SCHEMA_FILE,
 } from '@contentlab/git-adapter'
 import { ContentEntriesToActionsConverterService } from './content-entries-to-actions-converter.service'
 import { ActionModel } from './action.model'
 import { parse } from 'yaml'
-import { AxiosCacheInstance, setupCache } from 'axios-cache-interceptor'
+import { AxiosCacheInstance } from 'axios-cache-interceptor'
 import { GitLabRepositoryOptions } from './index'
-import { AxiosInstance } from 'axios'
 import * as path from 'path'
 
 export class GitLabAdapterService implements GitAdapter {
   static readonly QUERY_CACHE_SECONDS = 10 * 60
 
-  private readonly cachedHttpAdapter: AxiosCacheInstance
-
   private gitRepositoryOptions: GitLabRepositoryOptions | undefined
 
   constructor(
-    private httpAdapter: AxiosInstance,
+    private readonly cachedHttpAdapter: AxiosCacheInstance,
     private graphqlQueryFactory: GraphqlQueryFactoryService,
     private contentEntriesToActionsConverter: ContentEntriesToActionsConverterService,
-  ) {
-    this.cachedHttpAdapter = setupCache(httpAdapter, {
-      ttl: GitLabAdapterService.QUERY_CACHE_SECONDS * 1000, // milliseconds
-      methods: ['get', 'post'],
-    })
-  }
+  ) {}
 
   public async setRepositoryOptions(
     repositoryOptions: GitLabRepositoryOptions,
@@ -151,13 +143,13 @@ export class GitLabAdapterService implements GitAdapter {
       ref,
     )
 
-    // must not use cache adapter here, so we always get the branch's current head
-    const response = await this.httpAdapter.post(
+    const response = await this.cachedHttpAdapter.post(
       'https://gitlab.com/api/graphql',
       {
         query: queryLatestCommit,
       },
       {
+        cache: false, // must not use cache, so we always get the branch's current head
         headers: {
           authorization: `Bearer ${token}`,
         },
@@ -195,7 +187,7 @@ export class GitLabAdapterService implements GitAdapter {
       )
 
     const mutateCommit = this.graphqlQueryFactory.createCommitMutation()
-    const response: any = await this.httpAdapter.post(
+    const response: any = await this.cachedHttpAdapter.post(
       'https://gitlab.com/api/graphql',
       {
         query: mutateCommit,
@@ -207,6 +199,7 @@ export class GitLabAdapterService implements GitAdapter {
         },
       },
       {
+        cache: false,
         headers: {
           authorization: `Bearer ${token}`,
         },

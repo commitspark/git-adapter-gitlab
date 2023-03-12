@@ -3,11 +3,17 @@ import { ContentEntriesToActionsConverterService } from './content-entries-to-ac
 import { GitLabAdapterService } from './git-lab-adapter.service'
 import { GraphqlQueryFactoryService } from './graphql-query-factory.service'
 import axios from 'axios'
+import { setupCache } from 'axios-cache-interceptor'
 
 const container = createContainer({ injectionMode: InjectionMode.CLASSIC })
 
 container.register({
-  httpAdapter: asFunction(() => axios.create()),
+  cachedHttpAdapter: asFunction(() =>
+    setupCache(axios.create(), {
+      ttl: GitLabAdapterService.QUERY_CACHE_SECONDS * 1000, // milliseconds
+      methods: ['get', 'post'],
+    }),
+  ),
   gitLabAdapter: asClass(GitLabAdapterService),
 
   contentEntriesToActionsConverter: asClass(

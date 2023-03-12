@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Update dependencies
 
+### Fixed
+- Fixed inadvertent use of HTTP cache for some requests
+
 ## [0.7.0] - 2022-12-13
 ### Added
 - Expose schema file path and entries folder path as repository options
