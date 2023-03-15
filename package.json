@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@contentlab/git-adapter": "^0.6.0",
-    "awilix": "^8.0.0",
     "axios": "^1.2.2",
     "axios-cache-interceptor": "^1.0.0",
     "yaml": "^2.2.1"
