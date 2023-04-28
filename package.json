@@ -10,7 +10,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@contentlab/git-adapter": "^0.6.0",
+    "@contentlab/git-adapter": "^0.7.0",
     "axios": "^1.2.2",
     "axios-cache-interceptor": "^1.0.0",
     "yaml": "^2.2.1"

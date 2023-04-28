@@ -89,7 +89,11 @@ export class GitLabAdapterService implements GitAdapter {
       .map((node: any) => {
         const content = parse(node.rawBlob)
         const id = path.parse(node.path).name
-        return new ContentEntry(id, content.metadata, content.data)
+        return {
+          id: id,
+          metadata: content.metadata,
+          data: content.data,
+        } as ContentEntry
       })
   }
 
@@ -212,7 +216,7 @@ export class GitLabAdapterService implements GitAdapter {
       throw new Error(mutationResult.errors)
     }
 
-    return new Commit(mutationResult.commit.sha)
+    return { ref: mutationResult.commit.sha }
   }
 
   private getPathEntryFolder(
