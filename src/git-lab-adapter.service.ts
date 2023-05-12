@@ -7,7 +7,7 @@ import {
   GitAdapter,
   PATH_ENTRY_FOLDER,
   PATH_SCHEMA_FILE,
-} from '@contentlab/git-adapter'
+} from '@commitspark/git-adapter'
 import { ContentEntriesToActionsConverterService } from './content-entries-to-actions-converter.service'
 import { ActionModel } from './action.model'
 import { parse } from 'yaml'
