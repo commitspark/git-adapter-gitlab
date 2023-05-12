@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Rename organization
 
+### Fixed
+- Update `yaml` library to address [security advisory](https://github.com/advisories/GHSA-f9xv-q969-pqx4)
+
 ## [0.8.1] - 2023-04-28
 ### Fixed
 - Remove package.lock development code pollution
