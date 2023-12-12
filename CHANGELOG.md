@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fix lint errors
 - Switch to GraphQL query variables to prevent string escaping issues
+- Fix build process to include only relevant files
 
 ## [0.9.0] - 2023-05-12
 ### Changed
