@@ -14,6 +14,7 @@ import { parse } from 'yaml'
 import { AxiosCacheInstance } from 'axios-cache-interceptor'
 import { GitLabRepositoryOptions } from './index'
 import * as path from 'path'
+import { PathFactoryService } from './path-factory.service'
 
 export class GitLabAdapterService implements GitAdapter {
   static readonly QUERY_CACHE_SECONDS = 10 * 60
@@ -24,6 +25,7 @@ export class GitLabAdapterService implements GitAdapter {
     private readonly cachedHttpAdapter: AxiosCacheInstance,
     private graphqlQueryFactory: GraphqlQueryFactoryService,
     private contentEntriesToActionsConverter: ContentEntriesToActionsConverterService,
+    private pathFactory: PathFactoryService,
   ) {}
 
   public async setRepositoryOptions(
@@ -39,7 +41,9 @@ export class GitLabAdapterService implements GitAdapter {
 
     const projectPath = this.gitRepositoryOptions.projectPath
     const token = this.gitRepositoryOptions.token
-    const pathEntryFolder = this.getPathEntryFolder(this.gitRepositoryOptions)
+    const pathEntryFolder = this.pathFactory.getPathEntryFolder(
+      this.gitRepositoryOptions,
+    )
 
     const queryBlobs = this.graphqlQueryFactory.createBlobQuery()
     const filesResponse = await this.cachedHttpAdapter.post(
@@ -106,8 +110,9 @@ export class GitLabAdapterService implements GitAdapter {
 
     const projectPath = this.gitRepositoryOptions.projectPath
     const token = this.gitRepositoryOptions.token
-    const schemaFilePath =
-      this.gitRepositoryOptions.pathSchemaFile ?? PATH_SCHEMA_FILE
+    const schemaFilePath = this.pathFactory.getPathSchema(
+      this.gitRepositoryOptions,
+    )
 
     const queryContent = this.graphqlQueryFactory.createBlobContentQuery()
     const response = await this.cachedHttpAdapter.post(
@@ -179,7 +184,9 @@ export class GitLabAdapterService implements GitAdapter {
 
     const projectPath = this.gitRepositoryOptions.projectPath
     const token = this.gitRepositoryOptions.token
-    const pathEntryFolder = this.getPathEntryFolder(this.gitRepositoryOptions)
+    const pathEntryFolder = this.pathFactory.getPathEntryFolder(
+      this.gitRepositoryOptions,
+    )
 
     // assumes branch/ref already exists
     const existingContentEntries = await this.getContentEntries(commitDraft.ref)
@@ -221,18 +228,5 @@ export class GitLabAdapterService implements GitAdapter {
     }
 
     return { ref: mutationResult.commit.sha }
-  }
-
-  private getPathEntryFolder(
-    gitRepositoryOptions: GitLabRepositoryOptions,
-  ): string {
-    const pathEntryFolder =
-      gitRepositoryOptions.pathEntryFolder ?? PATH_ENTRY_FOLDER
-
-    if (pathEntryFolder.endsWith('/')) {
-      return pathEntryFolder.substring(0, pathEntryFolder.length - 1)
-    }
-
-    return pathEntryFolder
   }
 }
