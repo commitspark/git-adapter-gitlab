@@ -41,15 +41,16 @@ export class GitLabAdapterService implements GitAdapter {
     const token = this.gitRepositoryOptions.token
     const pathEntryFolder = this.getPathEntryFolder(this.gitRepositoryOptions)
 
-    const queryBlobs = this.graphqlQueryFactory.createBlobQuery(
-      projectPath,
-      commitHash,
-      pathEntryFolder,
-    )
+    const queryBlobs = this.graphqlQueryFactory.createBlobQuery()
     const filesResponse = await this.cachedHttpAdapter.post(
       'https://gitlab.com/api/graphql',
       {
         query: queryBlobs,
+        variables: {
+          projectFullPath: projectPath,
+          ref: commitHash,
+          path: pathEntryFolder,
+        },
       },
       {
         headers: {
@@ -66,15 +67,16 @@ export class GitLabAdapterService implements GitAdapter {
       filename.endsWith(ENTRY_EXTENSION),
     )
 
-    const queryContent = this.graphqlQueryFactory.createBlobContentQuery(
-      projectPath,
-      commitHash,
-      entryFilePaths,
-    )
+    const queryContent = this.graphqlQueryFactory.createBlobContentQuery()
     const contentResponse = await this.cachedHttpAdapter.post(
       'https://gitlab.com/api/graphql',
       {
         query: queryContent,
+        variables: {
+          projectFullPath: projectPath,
+          ref: commitHash,
+          paths: entryFilePaths,
+        },
       },
       {
         headers: {
@@ -107,15 +109,16 @@ export class GitLabAdapterService implements GitAdapter {
     const schemaFilePath =
       this.gitRepositoryOptions.pathSchemaFile ?? PATH_SCHEMA_FILE
 
-    const queryContent = this.graphqlQueryFactory.createBlobContentQuery(
-      projectPath,
-      commitHash,
-      [schemaFilePath],
-    )
+    const queryContent = this.graphqlQueryFactory.createBlobContentQuery()
     const response = await this.cachedHttpAdapter.post(
       'https://gitlab.com/api/graphql',
       {
         query: queryContent,
+        variables: {
+          projectFullPath: projectPath,
+          ref: commitHash,
+          paths: [schemaFilePath],
+        },
       },
       {
         headers: {
@@ -142,15 +145,16 @@ export class GitLabAdapterService implements GitAdapter {
     const projectPath = this.gitRepositoryOptions.projectPath
     const token = this.gitRepositoryOptions.token
 
-    const queryLatestCommit = this.graphqlQueryFactory.createLatestCommitQuery(
-      projectPath,
-      ref,
-    )
+    const queryLatestCommit = this.graphqlQueryFactory.createLatestCommitQuery()
 
     const response = await this.cachedHttpAdapter.post(
       'https://gitlab.com/api/graphql',
       {
         query: queryLatestCommit,
+        variables: {
+          projectFullPath: projectPath,
+          ref: ref,
+        },
       },
       {
         cache: false, // must not use cache, so we always get the branch's current head

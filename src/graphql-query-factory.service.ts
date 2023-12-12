@@ -1,11 +1,11 @@
 export class GraphqlQueryFactoryService {
-  public createBlobQuery(project: string, ref: string, path: string): string {
+  public createBlobQuery(): string {
     return `
-      query Blobs {
-        project(fullPath: "${project}") {
+      query Blobs ($projectFullPath: String!, $ref: String!, $path: String!) {
+        project(fullPath: $projectFullPath) {
           name
           repository {
-            tree(ref: "${ref}", path: "${path}") {
+            tree(ref: $ref, path: $path) {
               blobs {
                 nodes {
                   path
@@ -18,18 +18,13 @@ export class GraphqlQueryFactoryService {
     `
   }
 
-  public createBlobContentQuery(
-    project: string,
-    ref: string,
-    filePaths: string[],
-  ): string {
-    const paths = filePaths.map((path) => `"${path}"`).join(',')
+  public createBlobContentQuery(): string {
     return `
-      query Content {
-        project(fullPath: "${project}") {
+      query Content ($projectFullPath: String!, $ref: String!, $paths: [String!]! {
+        project(fullPath: $projectFullPath) {
           name
           repository {
-            blobs (ref:"${ref}", paths:[${paths}]) {
+            blobs (ref: $ref, paths: $paths) {
               edges {
                 node {
                   path
@@ -45,12 +40,12 @@ export class GraphqlQueryFactoryService {
 
   public createCommitMutation(): string {
     return `
-      mutation CommitCreate($actions:[CommitAction!]!, $branch:String!, $message:String!, $projectPath:ID!) {
+      mutation CommitCreate($actions: [CommitAction!]!, $branch: String!, $message: String!, $projectPath: ID!) {
         commitCreate(input: {
-          actions:$actions,
-          branch:$branch, 
-          projectPath:$projectPath,
-          message:$message,
+          actions: $actions,
+          branch: $branch, 
+          projectPath: $projectPath,
+          message: $message,
           }) {
           commit {
             sha
@@ -61,12 +56,12 @@ export class GraphqlQueryFactoryService {
     `
   }
 
-  public createLatestCommitQuery(project: string, ref: string): string {
-    return `query Content {
-        project(fullPath: "${project}") {
+  public createLatestCommitQuery(): string {
+    return `query Content ($projectFullPath: String!, $ref: String!) {
+        project(fullPath: $projectFullPath) {
           name
           repository {
-            tree(ref:"${ref}") {
+            tree(ref: $ref) {
               lastCommit {
                 sha
               }
