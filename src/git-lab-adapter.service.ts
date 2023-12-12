@@ -39,7 +39,7 @@ export class GitLabAdapterService implements GitAdapter {
 
     const projectPath = this.gitRepositoryOptions.projectPath
     const token = this.gitRepositoryOptions.token
-    let pathEntryFolder = this.getPathEntryFolder(this.gitRepositoryOptions)
+    const pathEntryFolder = this.getPathEntryFolder(this.gitRepositoryOptions)
 
     const queryBlobs = this.graphqlQueryFactory.createBlobQuery(
       projectPath,
@@ -175,7 +175,7 @@ export class GitLabAdapterService implements GitAdapter {
 
     const projectPath = this.gitRepositoryOptions.projectPath
     const token = this.gitRepositoryOptions.token
-    let pathEntryFolder = this.getPathEntryFolder(this.gitRepositoryOptions)
+    const pathEntryFolder = this.getPathEntryFolder(this.gitRepositoryOptions)
 
     // assumes branch/ref already exists
     const existingContentEntries = await this.getContentEntries(commitDraft.ref)
