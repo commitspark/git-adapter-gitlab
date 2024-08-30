@@ -1,20 +1,20 @@
 import { ActionModel } from './action.model'
-import { ContentEntryDraft, ENTRY_EXTENSION } from '@commitspark/git-adapter'
+import { EntryDraft, ENTRY_EXTENSION } from '@commitspark/git-adapter'
 import { stringify } from 'yaml'
 
-export class ContentEntriesToActionsConverterService {
+export class EntriesToActionsConverterService {
   convert(
-    contentEntries: ContentEntryDraft[],
+    entryDrafts: EntryDraft[],
     existingIdMap: Map<string, boolean>,
     parentSha: string | undefined,
     pathEntryFolder: string,
   ): ActionModel[] {
     const actions: ActionModel[] = []
-    contentEntries.forEach((contentEntry) => {
+    entryDrafts.forEach((entryDraft) => {
       let operation: string
-      if (contentEntry.deletion) {
+      if (entryDraft.deletion) {
         operation = 'DELETE'
-      } else if (existingIdMap.has(contentEntry.id)) {
+      } else if (existingIdMap.has(entryDraft.id)) {
         operation = 'UPDATE'
       } else {
         operation = 'CREATE'
@@ -23,10 +23,10 @@ export class ContentEntriesToActionsConverterService {
         new ActionModel(
           operation,
           stringify({
-            metadata: contentEntry.metadata,
-            data: contentEntry.data,
+            metadata: entryDraft.metadata,
+            data: entryDraft.data,
           }),
-          `${pathEntryFolder}/${contentEntry.id}${ENTRY_EXTENSION}`,
+          `${pathEntryFolder}/${entryDraft.id}${ENTRY_EXTENSION}`,
           parentSha,
         ),
       )

@@ -1,4 +1,4 @@
-import { ContentEntriesToActionsConverterService } from './content-entries-to-actions-converter.service'
+import { EntriesToActionsConverterService } from './entries-to-actions-converter.service'
 import { GitLabAdapterService } from './git-lab-adapter.service'
 import { GraphqlQueryFactoryService } from './graphql-query-factory.service'
 import axios from 'axios'
@@ -11,13 +11,12 @@ const cachedHttpAdapter = setupCache(axios.create(), {
 })
 
 const graphqlQueryFactoryService = new GraphqlQueryFactoryService()
-const contentEntriesToActionsConverterService =
-  new ContentEntriesToActionsConverterService()
+const entriesToActionsConverterService = new EntriesToActionsConverterService()
 const pathFactoryService = new PathFactoryService()
 
 export const gitLabAdapterService = new GitLabAdapterService(
   cachedHttpAdapter,
   graphqlQueryFactoryService,
-  contentEntriesToActionsConverterService,
+  entriesToActionsConverterService,
   pathFactoryService,
 )

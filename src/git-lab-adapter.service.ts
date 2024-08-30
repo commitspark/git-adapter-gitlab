@@ -2,13 +2,11 @@ import { GraphqlQueryFactoryService } from './graphql-query-factory.service'
 import {
   Commit,
   CommitDraft,
-  ContentEntry,
+  Entry,
   ENTRY_EXTENSION,
   GitAdapter,
-  PATH_ENTRY_FOLDER,
-  PATH_SCHEMA_FILE,
 } from '@commitspark/git-adapter'
-import { ContentEntriesToActionsConverterService } from './content-entries-to-actions-converter.service'
+import { EntriesToActionsConverterService } from './entries-to-actions-converter.service'
 import { ActionModel } from './action.model'
 import { parse } from 'yaml'
 import { AxiosCacheInstance } from 'axios-cache-interceptor'
@@ -24,7 +22,7 @@ export class GitLabAdapterService implements GitAdapter {
   constructor(
     private readonly cachedHttpAdapter: AxiosCacheInstance,
     private graphqlQueryFactory: GraphqlQueryFactoryService,
-    private contentEntriesToActionsConverter: ContentEntriesToActionsConverterService,
+    private entriesToActionsConverter: EntriesToActionsConverterService,
     private pathFactory: PathFactoryService,
   ) {}
 
@@ -34,7 +32,7 @@ export class GitLabAdapterService implements GitAdapter {
     this.gitRepositoryOptions = repositoryOptions
   }
 
-  public async getContentEntries(commitHash: string): Promise<ContentEntry[]> {
+  public async getEntries(commitHash: string): Promise<Entry[]> {
     if (this.gitRepositoryOptions === undefined) {
       throw new Error('Repository options must be set before reading')
     }
@@ -99,7 +97,7 @@ export class GitLabAdapterService implements GitAdapter {
           id: id,
           metadata: content.metadata,
           data: content.data,
-        } as ContentEntry
+        } as Entry
       })
   }
 
@@ -189,17 +187,16 @@ export class GitLabAdapterService implements GitAdapter {
     )
 
     // assumes branch/ref already exists
-    const existingContentEntries = await this.getContentEntries(commitDraft.ref)
+    const existingContentEntries = await this.getEntries(commitDraft.ref)
     const existingIdMap = new Map<string, boolean>()
     existingContentEntries.forEach((entry) => existingIdMap.set(entry.id, true))
 
-    const actions: ActionModel[] =
-      this.contentEntriesToActionsConverter.convert(
-        commitDraft.contentEntries,
-        existingIdMap,
-        commitDraft.parentSha,
-        pathEntryFolder,
-      )
+    const actions: ActionModel[] = this.entriesToActionsConverter.convert(
+      commitDraft.entries,
+      existingIdMap,
+      commitDraft.parentSha,
+      pathEntryFolder,
+    )
 
     const mutateCommit = this.graphqlQueryFactory.createCommitMutation()
     const response: any = await this.cachedHttpAdapter.post(
