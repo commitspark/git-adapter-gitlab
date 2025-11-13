@@ -1,6 +1,5 @@
-export class GraphqlQueryFactoryService {
-  public createBlobQuery(): string {
-    return `
+export function createBlobQuery(): string {
+  return `
       query Blobs ($projectFullPath: String!, $ref: String!, $path: String!) {
         project(fullPath: $projectFullPath) {
           name
@@ -16,11 +15,11 @@ export class GraphqlQueryFactoryService {
         }
       }
     `
-  }
+}
 
-  public createBlobContentQuery(): string {
-    return `
-      query Content ($projectFullPath: String!, $ref: String!, $paths: [String!]! {
+export function createBlobContentQuery(): string {
+  return `
+      query Content ($projectFullPath: String!, $ref: String!, $paths: [String!]!) {
         project(fullPath: $projectFullPath) {
           name
           repository {
@@ -36,10 +35,10 @@ export class GraphqlQueryFactoryService {
         }
       }
     `
-  }
+}
 
-  public createCommitMutation(): string {
-    return `
+export function createCommitMutation(): string {
+  return `
       mutation CommitCreate($actions: [CommitAction!]!, $branch: String!, $message: String!, $projectPath: ID!) {
         commitCreate(input: {
           actions: $actions,
@@ -54,10 +53,10 @@ export class GraphqlQueryFactoryService {
         }
       }
     `
-  }
+}
 
-  public createLatestCommitQuery(): string {
-    return `query Content ($projectFullPath: String!, $ref: String!) {
+export function createLatestCommitQuery(): string {
+  return `query Content ($projectFullPath: String!, $ref: String!) {
         project(fullPath: $projectFullPath) {
           name
           repository {
@@ -69,5 +68,4 @@ export class GraphqlQueryFactoryService {
           }
         }
       }`
-  }
 }

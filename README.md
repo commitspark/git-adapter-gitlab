@@ -5,10 +5,15 @@
 This repository holds code for a [Commitspark Git adapter](https://github.com/commitspark/git-adapter) that provides
 access to Git repositories hosted on GitLab (SaaS).
 
+# Installation
+
+```shell
+npm i @commitspark/git-adapter-gitlab
+```
+
 # Usage
 
-Instantiate the adapter with `createAdapter()` and then call `setRepositoryOptions()` with `GitLabRepositoryOptions` on
-the instance. These options are as follows:
+Instantiate the adapter with `createAdapter()`, providing `GitLabRepositoryOptions` with the following parameters:
 
 | Option name       | Required | Default value                       | Description                                     |
 |-------------------|----------|-------------------------------------|-------------------------------------------------|
@@ -16,6 +21,22 @@ the instance. These options are as follows:
 | `token`           | True     |                                     | GitLab (SaaS) personal access token             |
 | `pathSchemaFile`  | False    | `commitspark/schema/schema.graphql` | Path to schema file in repository               |
 | `pathEntryFolder` | False    | `commitspark/entries/`              | Path to folder for content entries              |
+
+# Example
+
+To use this adapter together with the Commitspark GraphQL API library, your code could be the following:
+
+```typescript
+import { createAdapter } from '@commitspark/git-adapter-gitlab'
+import { createClient } from '@commitspark/graphql-api'
+
+const gitLabAdapter = createAdapter({
+  projectPath: process.env.GITLAB_PROJECT_PATH,
+  token: process.env.GITLAB_PERSONAL_ACCESS_TOKEN,
+})
+
+const client = await createClient(gitLabAdapter)
+```
 
 # License
 
