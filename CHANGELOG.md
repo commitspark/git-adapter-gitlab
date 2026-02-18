@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fix incorrect ESM build configuration leading to broken builds
+- Fix incorrect ESM build configuration leading to broken build output
 
 ## [0.20.0]
 
