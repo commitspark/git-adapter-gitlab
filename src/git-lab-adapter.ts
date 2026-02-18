@@ -3,16 +3,16 @@ import {
   createBlobQuery,
   createCommitMutation,
   createLatestCommitQuery,
-} from './util/graphql-query-factory'
+} from './util/graphql-query-factory.ts'
 import { Commit, CommitDraft, Entry } from '@commitspark/git-adapter'
-import { convertEntriesToActions } from './util/entries-to-actions-converter'
-import { ActionModel } from './model/action.model'
+import { convertEntriesToActions } from './util/entries-to-actions-converter.ts'
+import { ActionModel } from './model/action.model.ts'
 import { parse } from 'yaml'
 import { AxiosCacheInstance } from 'axios-cache-interceptor'
-import { GitLabRepositoryOptions } from './index'
+import { GitLabRepositoryOptions } from './index.ts'
 import * as path from 'path'
-import { getPathEntryFolder, getPathSchema } from './util/path-factory'
-import { ENTRY_EXTENSION } from './util/types'
+import { getPathEntryFolder, getPathSchema } from './util/path-factory.ts'
+import { ENTRY_EXTENSION } from './util/types.ts'
 
 export async function getEntries(
   gitRepositoryOptions: GitLabRepositoryOptions,
