@@ -1,5 +1,5 @@
-import { GitLabRepositoryOptions } from '../index'
-import { PATH_ENTRY_FOLDER, PATH_SCHEMA_FILE } from './types'
+import { GitLabRepositoryOptions } from '../index.ts'
+import { PATH_ENTRY_FOLDER, PATH_SCHEMA_FILE } from './types.ts'
 
 export function getPathSchema(
   gitRepositoryOptions: GitLabRepositoryOptions,

@@ -1,7 +1,7 @@
 import { ActionModel } from '../model/action.model'
 import { EntryDraft } from '@commitspark/git-adapter'
 import { stringify } from 'yaml'
-import { ENTRY_EXTENSION } from './types'
+import { ENTRY_EXTENSION } from './types.ts'
 
 export function convertEntriesToActions(
   entryDrafts: EntryDraft[],

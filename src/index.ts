@@ -6,7 +6,7 @@ import {
   getEntries as getEntriesFn,
   getLatestCommitHash as getLatestCommitHashFn,
   getSchema as getSchemaFn,
-} from './git-lab-adapter'
+} from './git-lab-adapter.ts'
 
 export interface GitLabRepositoryOptions {
   projectPath: string
