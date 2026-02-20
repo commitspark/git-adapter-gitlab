@@ -9,6 +9,10 @@ export function convertEntriesToActions(
   parentSha: string | undefined,
   pathEntryFolder: string,
 ): ActionModel[] {
+  if (!pathEntryFolder.endsWith('/')) {
+    throw new Error('pathEntryFolder must end with a slash')
+  }
+
   const actions: ActionModel[] = []
   entryDrafts.forEach((entryDraft) => {
     let operation: string
@@ -26,7 +30,7 @@ export function convertEntriesToActions(
           metadata: entryDraft.metadata,
           data: entryDraft.data,
         }),
-        `${pathEntryFolder}/${entryDraft.id}${ENTRY_EXTENSION}`,
+        `${pathEntryFolder}${entryDraft.id}${ENTRY_EXTENSION}`,
         parentSha,
       ),
     )

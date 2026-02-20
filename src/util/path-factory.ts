@@ -13,8 +13,8 @@ export function getPathEntryFolder(
   const pathEntryFolder =
     gitRepositoryOptions.pathEntryFolder ?? PATH_ENTRY_FOLDER
 
-  if (pathEntryFolder.endsWith('/')) {
-    return pathEntryFolder.substring(0, pathEntryFolder.length - 1)
+  if (!pathEntryFolder.endsWith('/')) {
+    return pathEntryFolder + '/'
   }
 
   return pathEntryFolder
