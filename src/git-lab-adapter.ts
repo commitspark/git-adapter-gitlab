@@ -204,5 +204,5 @@ export async function createCommit(
     throw new Error(mutationResult.errors)
   }
 
-  return { ref: mutationResult.commit.sha }
+  return { commitHash: mutationResult.commit.sha }
 }
