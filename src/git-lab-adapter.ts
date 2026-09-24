@@ -4,7 +4,7 @@ import {
   createCommitMutation,
   createLatestCommitQuery,
 } from './util/graphql-query-factory.ts'
-import { Commit, CommitDraft, Entry } from '@commitspark/git-adapter'
+import { Commit, CommitDraft, Entry, EntryHash } from '@commitspark/git-adapter'
 import { convertEntriesToActions } from './util/entries-to-actions-converter.ts'
 import { ActionModel } from './model/action.model.ts'
 import { parse } from 'yaml'
@@ -14,11 +14,11 @@ import * as path from 'path'
 import { getPathEntryFolder, getPathSchema } from './util/path-factory.ts'
 import { ENTRY_EXTENSION } from './util/types.ts'
 
-export async function getEntries(
+export async function getEntryHashes(
   gitRepositoryOptions: GitLabRepositoryOptions,
   axiosCacheInstance: AxiosCacheInstance,
   commitHash: string,
-): Promise<Entry[]> {
+): Promise<EntryHash[]> {
   const projectPath = gitRepositoryOptions.projectPath
   const token = gitRepositoryOptions.token
   const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
@@ -40,14 +40,30 @@ export async function getEntries(
       },
     },
   )
-  const allFilePaths: string[] =
-    filesResponse.data.data.project.repository.tree.blobs.nodes.map(
-      (blob: any) => blob.path,
-    )
+  const blobs: { path: string; sha: string }[] =
+    filesResponse.data.data.project.repository.tree.blobs.nodes
 
-  const entryFilePaths = allFilePaths.filter((filename: string) =>
-    filename.endsWith(ENTRY_EXTENSION),
-  )
+  return blobs
+    .filter((blob) => blob.path.endsWith(ENTRY_EXTENSION))
+    .map((blob) => ({
+      id: path.parse(blob.path).name,
+      hash: blob.sha,
+    }))
+}
+
+export async function getEntriesByIds(
+  gitRepositoryOptions: GitLabRepositoryOptions,
+  axiosCacheInstance: AxiosCacheInstance,
+  commitHash: string,
+  ids: string[],
+): Promise<Entry[]> {
+  if (ids.length === 0) {
+    return []
+  }
+
+  const projectPath = gitRepositoryOptions.projectPath
+  const token = gitRepositoryOptions.token
+  const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
 
   const queryContent = createBlobContentQuery()
   const contentResponse = await axiosCacheInstance.post(
@@ -57,7 +73,7 @@ export async function getEntries(
       variables: {
         projectFullPath: projectPath,
         ref: commitHash,
-        paths: entryFilePaths,
+        paths: ids.map((id) => `${pathEntryFolder}${id}${ENTRY_EXTENSION}`),
       },
     },
     {
@@ -163,13 +179,15 @@ export async function createCommit(
   const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
 
   // assumes branch/ref already exists
-  const existingContentEntries = await getEntries(
+  const existingEntryHashes = await getEntryHashes(
     gitRepositoryOptions,
     axiosCacheInstance,
     commitDraft.ref,
   )
   const existingIdMap = new Map<string, boolean>()
-  existingContentEntries.forEach((entry) => existingIdMap.set(entry.id, true))
+  existingEntryHashes.forEach((entryHash) =>
+    existingIdMap.set(entryHash.id, true),
+  )
 
   const actions: ActionModel[] = convertEntriesToActions(
     commitDraft.entries,

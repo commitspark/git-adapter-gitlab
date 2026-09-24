@@ -3,7 +3,8 @@ import axios from 'axios'
 import { setupCache } from 'axios-cache-interceptor'
 import {
   createCommit as createCommitFn,
-  getEntries as getEntriesFn,
+  getEntriesByIds as getEntriesByIdsFn,
+  getEntryHashes as getEntryHashesFn,
   getLatestCommitHash as getLatestCommitHashFn,
   getSchema as getSchemaFn,
 } from './git-lab-adapter.ts'
@@ -24,8 +25,11 @@ export function createAdapter(options: GitLabRepositoryOptions): GitAdapter {
   })
 
   return {
-    async getEntries(commitHash: string) {
-      return getEntriesFn(options, axiosCacheInstance, commitHash)
+    async getEntryHashes(commitHash: string) {
+      return getEntryHashesFn(options, axiosCacheInstance, commitHash)
+    },
+    async getEntriesByIds(commitHash: string, ids: string[]) {
+      return getEntriesByIdsFn(options, axiosCacheInstance, commitHash, ids)
     },
     async getSchema(commitHash: string) {
       return getSchemaFn(options, axiosCacheInstance, commitHash)

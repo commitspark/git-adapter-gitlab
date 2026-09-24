@@ -8,6 +8,7 @@ export function createBlobQuery(): string {
               blobs {
                 nodes {
                   path
+                  sha
                 }
               }
             }
