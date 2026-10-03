@@ -1,4 +1,4 @@
-import { ActionModel } from '../model/action.model'
+import { ActionModel } from '../model/action.model.ts'
 import { EntryDraft } from '@commitspark/git-adapter'
 import { stringify } from 'yaml'
 import { ENTRY_EXTENSION } from './types.ts'

@@ -1,4 +1,4 @@
-import { convertEntriesToActions } from '../../../src/util/entries-to-actions-converter'
+import { convertEntriesToActions } from '../../../src/util/entries-to-actions-converter.ts'
 import { EntryDraft } from '@commitspark/git-adapter'
 
 describe('entries-to-actions-converter', () => {
