@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Support entry IDs containing `/` as entries in subfolders of the entry folder, ignore hidden files and folders
+  (name starting with `.`) and symbolic links in the entry folder, and reject invalid entry IDs with `BAD_REQUEST`
+  before calling GitLab
 - Publish separate type declarations for the ESM and CJS builds and reference them per condition in `exports` of
   `package.json`, so that TypeScript projects that import this package from ESM code with `moduleResolution` set to
   `node16` or `nodenext` receive correct types. Type declarations are no longer located in `dist/types`.
@@ -16,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix entries and blob contents beyond the first page of 100 results being ignored by reading all pages
+- Fix all read queries being rejected by GitLab because the project path variable was declared as `String!` instead
+  of `ID!`
+- Fix retrieval of entry contents exceeding GitLab's query complexity limit by requesting at most 50 entries per query
 - Fix ESM build failing to load with `ERR_MODULE_NOT_FOUND` due to a missing file extension in a relative import
 
 ## [2.0.0-beta.1] - 2026-09-24
