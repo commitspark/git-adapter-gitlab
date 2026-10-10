@@ -1,6 +1,6 @@
 export function createBlobQuery(): string {
   return `
-      query Blobs ($projectFullPath: String!, $ref: String!, $path: String!) {
+      query Blobs ($projectFullPath: ID!, $ref: String!, $path: String!) {
         project(fullPath: $projectFullPath) {
           name
           repository {
@@ -20,7 +20,7 @@ export function createBlobQuery(): string {
 
 export function createBlobContentQuery(): string {
   return `
-      query Content ($projectFullPath: String!, $ref: String!, $paths: [String!]!) {
+      query Content ($projectFullPath: ID!, $ref: String!, $paths: [String!]!) {
         project(fullPath: $projectFullPath) {
           name
           repository {
@@ -57,7 +57,7 @@ export function createCommitMutation(): string {
 }
 
 export function createLatestCommitQuery(): string {
-  return `query Content ($projectFullPath: String!, $ref: String!) {
+  return `query Content ($projectFullPath: ID!, $ref: String!) {
         project(fullPath: $projectFullPath) {
           name
           repository {
