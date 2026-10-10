@@ -1,5 +1,9 @@
 import { GitLabRepositoryOptions } from '../index.ts'
-import { PATH_ENTRY_FOLDER, PATH_SCHEMA_FILE } from './types.ts'
+import {
+  ENTRY_EXTENSION,
+  PATH_ENTRY_FOLDER,
+  PATH_SCHEMA_FILE,
+} from './types.ts'
 
 export function getPathSchema(
   gitRepositoryOptions: GitLabRepositoryOptions,
@@ -18,4 +22,21 @@ export function getPathEntryFolder(
   }
 
   return pathEntryFolder
+}
+
+export function getPathEntry(
+  gitRepositoryOptions: GitLabRepositoryOptions,
+  id: string,
+): string {
+  return `${getPathEntryFolder(gitRepositoryOptions)}${id}${ENTRY_EXTENSION}`
+}
+
+export function getEntryIdFromPath(
+  gitRepositoryOptions: GitLabRepositoryOptions,
+  filePath: string,
+): string {
+  return filePath.substring(
+    getPathEntryFolder(gitRepositoryOptions).length,
+    filePath.length - ENTRY_EXTENSION.length,
+  )
 }
