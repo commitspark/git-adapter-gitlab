@@ -4,15 +4,52 @@ import {
   createCommitMutation,
   createLatestCommitQuery,
 } from './util/graphql-query-factory.ts'
-import { Commit, CommitDraft, Entry, EntryHash } from '@commitspark/git-adapter'
+import {
+  Commit,
+  CommitDraft,
+  Entry,
+  EntryHash,
+  isHiddenPath,
+  validateEntryId,
+} from '@commitspark/git-adapter'
 import { convertEntriesToActions } from './util/entries-to-actions-converter.ts'
 import { ActionModel } from './model/action.model.ts'
 import { parse } from 'yaml'
 import { AxiosCacheInstance } from 'axios-cache-interceptor'
 import { GitLabRepositoryOptions } from './index.ts'
-import * as path from 'path'
-import { getPathEntryFolder, getPathSchema } from './util/path-factory.ts'
+import {
+  getEntryIdFromPath,
+  getPathEntry,
+  getPathEntryFolder,
+  getPathSchema,
+} from './util/path-factory.ts'
 import { ENTRY_EXTENSION } from './util/types.ts'
+
+// symbolic links are stored as blobs, but are not files
+const SYMBOLIC_LINK_MODE = '120000'
+// number of blob paths requested at once; the complexity score of a blob query grows by about 2 per path, and GitLab
+// rejects queries scoring above 200 (unauthenticated) or 250 (authenticated)
+const BLOB_PATHS_BATCH_SIZE = 50
+
+interface Connection<T> {
+  nodes: T[]
+  pageInfo: { hasNextPage: boolean; endCursor: string | null }
+}
+
+async function fetchAllNodes<T>(
+  fetchPage: (after: string | null) => Promise<Connection<T>>,
+): Promise<T[]> {
+  const nodes: T[] = []
+  let after: string | null = null
+  do {
+    const connection: Connection<T> = await fetchPage(after)
+    nodes.push(...connection.nodes)
+    after = connection.pageInfo.hasNextPage
+      ? connection.pageInfo.endCursor
+      : null
+  } while (after !== null)
+  return nodes
+}
 
 export async function getEntryHashes(
   gitRepositoryOptions: GitLabRepositoryOptions,
@@ -24,31 +61,81 @@ export async function getEntryHashes(
   const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
 
   const queryBlobs = createBlobQuery()
-  const filesResponse = await axiosCacheInstance.post(
-    'https://gitlab.com/api/graphql',
-    {
-      query: queryBlobs,
-      variables: {
-        projectFullPath: projectPath,
-        ref: commitHash,
-        path: pathEntryFolder,
+  const blobs = await fetchAllNodes<{
+    path: string
+    sha: string
+    mode: string
+  }>(async (after) => {
+    const filesResponse = await axiosCacheInstance.post(
+      'https://gitlab.com/api/graphql',
+      {
+        query: queryBlobs,
+        variables: {
+          projectFullPath: projectPath,
+          ref: commitHash,
+          path: pathEntryFolder,
+          after: after,
+        },
       },
-    },
-    {
-      headers: {
-        authorization: `Bearer ${token}`,
+      {
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
       },
-    },
-  )
-  const blobs: { path: string; sha: string }[] =
-    filesResponse.data.data.project.repository.tree.blobs.nodes
+    )
+    return filesResponse.data.data.project.repository.tree.blobs
+  })
 
   return blobs
-    .filter((blob) => blob.path.endsWith(ENTRY_EXTENSION))
+    .filter(
+      (blob) =>
+        blob.mode !== SYMBOLIC_LINK_MODE &&
+        blob.path.startsWith(pathEntryFolder) &&
+        blob.path.endsWith(ENTRY_EXTENSION) &&
+        !isHiddenPath(blob.path.substring(pathEntryFolder.length)),
+    )
     .map((blob) => ({
-      id: path.parse(blob.path).name,
+      id: getEntryIdFromPath(gitRepositoryOptions, blob.path),
       hash: blob.sha,
     }))
+}
+
+async function getBlobContents(
+  gitRepositoryOptions: GitLabRepositoryOptions,
+  axiosCacheInstance: AxiosCacheInstance,
+  commitHash: string,
+  paths: string[],
+): Promise<{ path: string; rawBlob: string }[]> {
+  const queryContent = createBlobContentQuery()
+  const blobs: { path: string; rawBlob: string }[] = []
+  for (let index = 0; index < paths.length; index += BLOB_PATHS_BATCH_SIZE) {
+    const batchPaths = paths.slice(index, index + BLOB_PATHS_BATCH_SIZE)
+    blobs.push(
+      ...(await fetchAllNodes<{ path: string; rawBlob: string }>(
+        async (after) => {
+          const contentResponse = await axiosCacheInstance.post(
+            'https://gitlab.com/api/graphql',
+            {
+              query: queryContent,
+              variables: {
+                projectFullPath: gitRepositoryOptions.projectPath,
+                ref: commitHash,
+                paths: batchPaths,
+                after: after,
+              },
+            },
+            {
+              headers: {
+                authorization: `Bearer ${gitRepositoryOptions.token}`,
+              },
+            },
+          )
+          return contentResponse.data.data.project.repository.blobs
+        },
+      )),
+    )
+  }
+  return blobs
 }
 
 export async function getEntriesByIds(
@@ -57,44 +144,26 @@ export async function getEntriesByIds(
   commitHash: string,
   ids: string[],
 ): Promise<Entry[]> {
+  ids.forEach(validateEntryId)
   if (ids.length === 0) {
     return []
   }
 
-  const projectPath = gitRepositoryOptions.projectPath
-  const token = gitRepositoryOptions.token
-  const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
-
-  const queryContent = createBlobContentQuery()
-  const contentResponse = await axiosCacheInstance.post(
-    'https://gitlab.com/api/graphql',
-    {
-      query: queryContent,
-      variables: {
-        projectFullPath: projectPath,
-        ref: commitHash,
-        paths: ids.map((id) => `${pathEntryFolder}${id}${ENTRY_EXTENSION}`),
-      },
-    },
-    {
-      headers: {
-        authorization: `Bearer ${token}`,
-      },
-    },
+  const blobs = await getBlobContents(
+    gitRepositoryOptions,
+    axiosCacheInstance,
+    commitHash,
+    ids.map((id) => getPathEntry(gitRepositoryOptions, id)),
   )
-  const edges = contentResponse.data.data.project.repository.blobs.edges
 
-  return edges
-    .map((edge: any) => edge.node)
-    .map((node: any) => {
-      const content = parse(node.rawBlob)
-      const id = path.parse(node.path).name
-      return {
-        id: id,
-        metadata: content.metadata,
-        data: content.data,
-      } as Entry
-    })
+  return blobs.map((blob) => {
+    const content = parse(blob.rawBlob)
+    return {
+      id: getEntryIdFromPath(gitRepositoryOptions, blob.path),
+      metadata: content.metadata,
+      data: content.data,
+    } as Entry
+  })
 }
 
 export async function getSchema(
@@ -103,35 +172,22 @@ export async function getSchema(
   commitHash: string,
 ): Promise<string> {
   const projectPath = gitRepositoryOptions.projectPath
-  const token = gitRepositoryOptions.token
   const schemaFilePath = getPathSchema(gitRepositoryOptions)
 
-  const queryContent = createBlobContentQuery()
-  const response = await axiosCacheInstance.post(
-    'https://gitlab.com/api/graphql',
-    {
-      query: queryContent,
-      variables: {
-        projectFullPath: projectPath,
-        ref: commitHash,
-        paths: [schemaFilePath],
-      },
-    },
-    {
-      headers: {
-        authorization: `Bearer ${token}`,
-      },
-    },
+  const blobs = await getBlobContents(
+    gitRepositoryOptions,
+    axiosCacheInstance,
+    commitHash,
+    [schemaFilePath],
   )
-  const edges = response.data.data.project.repository.blobs.edges
 
-  if (edges.length === 0) {
+  if (blobs.length === 0) {
     throw new Error(
       `"${schemaFilePath}" not found in Git repository "${projectPath}" at commit "${commitHash}"`,
     )
   }
 
-  return edges[0].node.rawBlob
+  return blobs[0].rawBlob
 }
 
 export async function getLatestCommitHash(
@@ -174,6 +230,7 @@ export async function createCommit(
   axiosCacheInstance: AxiosCacheInstance,
   commitDraft: CommitDraft,
 ): Promise<Commit> {
+  commitDraft.entries.forEach((entryDraft) => validateEntryId(entryDraft.id))
   const projectPath = gitRepositoryOptions.projectPath
   const token = gitRepositoryOptions.token
   const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
