@@ -31,7 +31,9 @@ export function convertEntriesToActions(
           data: entryDraft.data,
         }),
         `${pathEntryFolder}${entryDraft.id}${ENTRY_EXTENSION}`,
-        parentSha,
+        // GitLab rejects updates and deletions of files changed after this commit; it ignores the value on creation,
+        // where it rejects existing files instead
+        operation === 'CREATE' ? undefined : parentSha,
       ),
     )
   })
