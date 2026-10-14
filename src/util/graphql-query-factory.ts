@@ -68,10 +68,8 @@ export function createLatestCommitQuery(): string {
         project(fullPath: $projectFullPath) {
           name
           repository {
-            tree(ref: $ref) {
-              lastCommit {
-                sha
-              }
+            commit(ref: $ref) {
+              sha
             }
           }
         }
