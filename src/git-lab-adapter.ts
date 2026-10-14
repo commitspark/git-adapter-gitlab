@@ -219,7 +219,7 @@ export async function getLatestCommitHash(
     },
   )
 
-  // the commit the ref points to, as opposed to `tree.lastCommit`, which is the last commit that changed the tree
+  // the commit the ref points to
   const commit = response.data.data?.project?.repository?.commit
   if (!commit) {
     throw new GitAdapterError(
