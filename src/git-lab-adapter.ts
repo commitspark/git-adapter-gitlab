@@ -9,6 +9,8 @@ import {
   CommitDraft,
   Entry,
   EntryHash,
+  ErrorCode,
+  GitAdapterError,
   isHiddenPath,
   validateEntryId,
 } from '@commitspark/git-adapter'
@@ -217,14 +219,29 @@ export async function getLatestCommitHash(
     },
   )
 
-  const lastCommit = response.data.data.project.repository.tree.lastCommit
-  if (!lastCommit) {
-    throw new Error(`No commit found for branch "${ref}"`)
+  // the commit the ref points to
+  const commit = response.data.data?.project?.repository?.commit
+  if (!commit) {
+    throw new GitAdapterError(
+      ErrorCode.NOT_FOUND,
+      `No commit found for ref "${ref}"`,
+    )
   }
 
-  return lastCommit.sha
+  return commit.sha
 }
 
+/**
+ * Commits the entry drafts with GitLab's `commitCreate` mutation. GitLab cannot move a branch only if it still points
+ * to a given commit, so the commit precondition of the adapter interface is approximated as follows:
+ * - The branch head is compared with `parentSha` right before committing; if it has moved, `CONFLICT` is thrown.
+ * - Each updated or deleted entry file is sent with `lastCommitId` set to `parentSha`, so that GitLab itself rejects
+ *   the commit if the file was changed after `parentSha`. Whether an entry is created or updated is decided from the
+ *   entries at `parentSha`, so that GitLab also rejects creating an entry that was created concurrently.
+ * - If GitLab rejects the commit and the branch has moved since `parentSha`, `CONFLICT` is thrown.
+ * Commits by others between the head check and the commit that change entry files not written by this commit are not
+ * detected, e.g. the deletion of an entry that this commit references.
+ */
 export async function createCommit(
   gitRepositoryOptions: GitLabRepositoryOptions,
   axiosCacheInstance: AxiosCacheInstance,
@@ -235,14 +252,19 @@ export async function createCommit(
   const token = gitRepositoryOptions.token
   const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
 
-  // assumes branch/ref already exists
-  const existingEntryHashes = await getEntryHashes(
+  await assertBranchHasNotMoved(
     gitRepositoryOptions,
     axiosCacheInstance,
-    commitDraft.ref,
+    commitDraft,
+  )
+
+  const parentEntryHashes = await getEntryHashes(
+    gitRepositoryOptions,
+    axiosCacheInstance,
+    commitDraft.parentSha,
   )
   const existingIdMap = new Map<string, boolean>()
-  existingEntryHashes.forEach((entryHash) =>
+  parentEntryHashes.forEach((entryHash) =>
     existingIdMap.set(entryHash.id, true),
   )
 
@@ -273,11 +295,46 @@ export async function createCommit(
     },
   )
 
-  const mutationResult = response.data.data.commitCreate
+  if (response.data.errors) {
+    throw new GitAdapterError(
+      ErrorCode.INTERNAL_ERROR,
+      `Failed to create commit: ${JSON.stringify(response.data.errors)}`,
+    )
+  }
 
+  const mutationResult = response.data.data.commitCreate
   if (mutationResult.errors.length > 0) {
-    throw new Error(mutationResult.errors)
+    // rejections due to concurrent changes are detected by the branch having moved instead of by GitLab's error
+    // messages, which are not part of its API contract
+    await assertBranchHasNotMoved(
+      gitRepositoryOptions,
+      axiosCacheInstance,
+      commitDraft,
+    )
+    throw new GitAdapterError(
+      ErrorCode.BAD_REQUEST,
+      `Failed to create commit: ${mutationResult.errors.join('; ')}`,
+    )
   }
 
   return { commitHash: mutationResult.commit.sha }
+}
+
+async function assertBranchHasNotMoved(
+  gitRepositoryOptions: GitLabRepositoryOptions,
+  axiosCacheInstance: AxiosCacheInstance,
+  commitDraft: CommitDraft,
+): Promise<void> {
+  const headCommitHash = await getLatestCommitHash(
+    gitRepositoryOptions,
+    axiosCacheInstance,
+    commitDraft.ref,
+  )
+  if (headCommitHash !== commitDraft.parentSha) {
+    throw new GitAdapterError(
+      ErrorCode.CONFLICT,
+      `Branch "${commitDraft.ref}" has moved: expected parent commit "${commitDraft.parentSha}" ` +
+        `but branch points to "${headCommitHash}"`,
+    )
+  }
 }

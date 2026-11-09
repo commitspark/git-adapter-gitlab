@@ -5,6 +5,7 @@ import {
   createCommit,
   getEntriesByIds,
   getEntryHashes,
+  getLatestCommitHash,
   getSchema,
 } from '../../../src/git-lab-adapter.ts'
 import { GitLabRepositoryOptions } from '../../../src/index.ts'
@@ -247,7 +248,171 @@ describe('Entries', () => {
     })
   })
 
+  const headResponse = (sha: string | null) =>
+    ({
+      data: {
+        data: {
+          project: {
+            repository: { commit: sha === null ? null : { sha: sha } },
+          },
+        },
+      },
+    }) as Partial<AxiosResponse> as AxiosResponse
+
+  const commitCreateResponse = (sha: string | null, errors: string[] = []) =>
+    ({
+      data: {
+        data: {
+          commitCreate: {
+            commit: sha === null ? null : { sha: sha },
+            errors: errors,
+          },
+        },
+      },
+    }) as Partial<AxiosResponse> as AxiosResponse
+
+  describe('getLatestCommitHash', () => {
+    it('should return the commit the ref points to', async () => {
+      mockAxiosInstance.post.mockResolvedValue(headResponse('head123'))
+
+      await expect(
+        getLatestCommitHash(mockOptions, mockAxiosInstance, 'main'),
+      ).resolves.toBe('head123')
+      const request = mockAxiosInstance.post.mock.calls[0][1] as {
+        query: string
+      }
+      expect(request.query).toContain('commit(ref: $ref)')
+      expect(postedVariables(0)).toMatchObject({ ref: 'main' })
+    })
+
+    it('should throw GitAdapterError with NOT_FOUND when the ref does not exist', async () => {
+      mockAxiosInstance.post.mockResolvedValue(headResponse(null))
+
+      await expect(
+        getLatestCommitHash(mockOptions, mockAxiosInstance, 'missing'),
+      ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND })
+    })
+  })
+
   describe('createCommit', () => {
+    const commitDraft = {
+      ref: 'main',
+      parentSha: 'parent123',
+      message: 'test',
+      entries: [
+        {
+          id: 'existing',
+          metadata: { type: 'A' },
+          data: {},
+          deletion: false,
+        },
+        { id: 'new', metadata: { type: 'A' }, data: {}, deletion: false },
+        { id: 'deleted', metadata: { type: 'A' }, data: {}, deletion: true },
+      ],
+    }
+
+    const parentTreeResponse = () =>
+      treeResponse([
+        {
+          path: 'commitspark/entries/existing.yaml',
+          sha: 'sha-1',
+          mode: '100644',
+        },
+        {
+          path: 'commitspark/entries/deleted.yaml',
+          sha: 'sha-2',
+          mode: '100644',
+        },
+      ])
+
+    it('should commit with actions based on the parent commit and guard changed files by the parent commit', async () => {
+      mockAxiosInstance.post
+        .mockResolvedValueOnce(headResponse('parent123'))
+        .mockResolvedValueOnce(parentTreeResponse())
+        .mockResolvedValueOnce(commitCreateResponse('new123'))
+
+      await expect(
+        createCommit(mockOptions, mockAxiosInstance, commitDraft),
+      ).resolves.toEqual({ commitHash: 'new123' })
+
+      expect(postedVariables(1)).toMatchObject({ ref: 'parent123' })
+      expect(postedVariables(2)).toMatchObject({
+        branch: 'main',
+        actions: [
+          {
+            action: 'UPDATE',
+            filePath: 'commitspark/entries/existing.yaml',
+            lastCommitId: 'parent123',
+          },
+          {
+            action: 'CREATE',
+            filePath: 'commitspark/entries/new.yaml',
+            lastCommitId: undefined,
+          },
+          {
+            action: 'DELETE',
+            filePath: 'commitspark/entries/deleted.yaml',
+            lastCommitId: 'parent123',
+          },
+        ],
+      })
+    })
+
+    it('should throw GitAdapterError with CONFLICT without committing when the branch has moved', async () => {
+      mockAxiosInstance.post.mockResolvedValueOnce(headResponse('concurrent'))
+
+      await expect(
+        createCommit(mockOptions, mockAxiosInstance, commitDraft),
+      ).rejects.toMatchObject({ code: ErrorCode.CONFLICT })
+      expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1)
+    })
+
+    it('should throw GitAdapterError with CONFLICT when GitLab rejects the commit and the branch has moved', async () => {
+      mockAxiosInstance.post
+        .mockResolvedValueOnce(headResponse('parent123'))
+        .mockResolvedValueOnce(parentTreeResponse())
+        .mockResolvedValueOnce(
+          commitCreateResponse(null, [
+            'The file has changed since you started editing it: commitspark/entries/existing.yaml',
+          ]),
+        )
+        .mockResolvedValueOnce(headResponse('concurrent'))
+
+      await expect(
+        createCommit(mockOptions, mockAxiosInstance, commitDraft),
+      ).rejects.toMatchObject({ code: ErrorCode.CONFLICT })
+    })
+
+    it('should throw GitAdapterError with BAD_REQUEST when GitLab rejects the commit and the branch has not moved', async () => {
+      mockAxiosInstance.post
+        .mockResolvedValueOnce(headResponse('parent123'))
+        .mockResolvedValueOnce(parentTreeResponse())
+        .mockResolvedValueOnce(
+          commitCreateResponse(null, ['You must provide a commit message']),
+        )
+        .mockResolvedValueOnce(headResponse('parent123'))
+
+      await expect(
+        createCommit(mockOptions, mockAxiosInstance, commitDraft),
+      ).rejects.toMatchObject({
+        code: ErrorCode.BAD_REQUEST,
+        message: expect.stringContaining('You must provide a commit message'),
+      })
+    })
+
+    it('should throw GitAdapterError with INTERNAL_ERROR when GitLab returns GraphQL errors', async () => {
+      mockAxiosInstance.post
+        .mockResolvedValueOnce(headResponse('parent123'))
+        .mockResolvedValueOnce(parentTreeResponse())
+        .mockResolvedValueOnce({
+          data: { errors: [{ message: 'Internal server error' }] },
+        } as Partial<AxiosResponse> as AxiosResponse)
+
+      await expect(
+        createCommit(mockOptions, mockAxiosInstance, commitDraft),
+      ).rejects.toMatchObject({ code: ErrorCode.INTERNAL_ERROR })
+    })
+
     it('should reject invalid entry IDs without calling GitLab', async () => {
       await expect(
         createCommit(mockOptions, mockAxiosInstance, {
