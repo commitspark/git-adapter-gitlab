@@ -283,7 +283,11 @@ export async function createCommit(
       variables: {
         actions,
         branch: commitDraft.ref, // if `ref` is a hash and not a branch, commits are rejected by GitLab
-        message: commitDraft.message ?? '-',
+        // GitLab takes a single Git commit message, in which a blank line separates the body
+        message:
+          commitDraft.body === undefined
+            ? commitDraft.message
+            : `${commitDraft.message}\n\n${commitDraft.body}`,
         projectPath: projectPath,
       },
     },
