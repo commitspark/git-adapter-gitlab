@@ -17,7 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Determine the latest commit of a ref from the commit the ref points to instead of the last commit that changed the
   repository tree
 - Throw `GitAdapterError` instead of `Error` when a commit fails or a ref has no commit
-- Upgrade to @commitspark/git-adapter 2.0.0-beta.3
 - Append `body` of the commit draft to the commit message, separated by a blank line, and remove the fallback message
   `-`, as the message is required
 
