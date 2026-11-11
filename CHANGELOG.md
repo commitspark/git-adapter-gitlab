@@ -13,19 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Approximate the commit precondition of the adapter interface, as GitLab offers no atomic check of the branch head:
-  compare the branch head with `parentSha` before committing, decide between creating and updating entry files based
-  on the entries at `parentSha` instead of the current branch, and send `lastCommitId` only for updated and deleted
-  files; throw `CONFLICT` if the branch has moved, also when GitLab rejects a commit; document the remaining
-  limitation
-- Determine the latest commit of a ref from the commit the ref points to instead of the last commit that changed the
-  repository tree
-- Throw `GitAdapterError` instead of `Error` when a commit fails or a ref has no commit
+- Fail a commit with `CONFLICT` if the branch no longer points to `parentSha`, so that concurrent changes are not
+  overwritten; as GitLab offers no atomic check, a short window remains (see README)
+- Throw `GitAdapterError` with an error code instead of a plain `Error` when a commit fails or a ref has no commit
 
 ### Fixed
 
 - Creating an entry that was created concurrently by another writer overwrote that entry instead of failing, and
   updating an entry that was deleted concurrently recreated it
+- Return the commit a ref points to as its latest commit, instead of the last commit that changed files
 
 ## [2.0.0-beta.2] - 2026-10-14
 
