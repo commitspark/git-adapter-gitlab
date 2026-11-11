@@ -358,6 +358,26 @@ describe('Entries', () => {
       })
     })
 
+    it.each([
+      ['without body', undefined, 'test'],
+      ['with body', 'Change details', 'test\n\nChange details'],
+    ])(
+      'should commit the message of a commit draft %s, separating the body with a blank line',
+      async (_description, body, expectedMessage) => {
+        mockAxiosInstance.post
+          .mockResolvedValueOnce(headResponse('parent123'))
+          .mockResolvedValueOnce(parentTreeResponse())
+          .mockResolvedValueOnce(commitCreateResponse('new123'))
+
+        await createCommit(mockOptions, mockAxiosInstance, {
+          ...commitDraft,
+          body,
+        })
+
+        expect(postedVariables(2)).toMatchObject({ message: expectedMessage })
+      },
+    )
+
     it('should throw GitAdapterError with CONFLICT without committing when the branch has moved', async () => {
       mockAxiosInstance.post.mockResolvedValueOnce(headResponse('concurrent'))
 
