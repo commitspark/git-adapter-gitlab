@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support commit message bodies, so that commits can explain a change in more detail than the single-line message
+
 ### Changed
 
 - Approximate the commit precondition of the adapter interface, as GitLab offers no atomic check of the branch head:
@@ -17,8 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Determine the latest commit of a ref from the commit the ref points to instead of the last commit that changed the
   repository tree
 - Throw `GitAdapterError` instead of `Error` when a commit fails or a ref has no commit
-- Append `body` of the commit draft to the commit message, separated by a blank line, and remove the fallback message
-  `-`, as the message is required
 
 ### Fixed
 
