@@ -378,6 +378,30 @@ describe('Entries', () => {
       },
     )
 
+    it('should update the schema file with the schema of a commit draft, guarded by the parent commit', async () => {
+      mockAxiosInstance.post
+        .mockResolvedValueOnce(headResponse('parent123'))
+        .mockResolvedValueOnce(parentTreeResponse())
+        .mockResolvedValueOnce(commitCreateResponse('new123'))
+
+      await createCommit(mockOptions, mockAxiosInstance, {
+        ...commitDraft,
+        entries: [],
+        schema: 'type Query { a: String }',
+      })
+
+      expect(postedVariables(2)).toMatchObject({
+        actions: [
+          {
+            action: 'UPDATE',
+            content: 'type Query { a: String }',
+            filePath: 'commitspark/schema/schema.graphql',
+            lastCommitId: 'parent123',
+          },
+        ],
+      })
+    })
+
     it('should throw GitAdapterError with CONFLICT without committing when the branch has moved', async () => {
       mockAxiosInstance.post.mockResolvedValueOnce(headResponse('concurrent'))
 

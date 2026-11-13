@@ -235,9 +235,10 @@ export async function getLatestCommitHash(
  * Commits the entry drafts with GitLab's `commitCreate` mutation. GitLab cannot move a branch only if it still points
  * to a given commit, so the commit precondition of the adapter interface is approximated as follows:
  * - The branch head is compared with `parentSha` right before committing; if it has moved, `CONFLICT` is thrown.
- * - Each updated or deleted entry file is sent with `lastCommitId` set to `parentSha`, so that GitLab itself rejects
- *   the commit if the file was changed after `parentSha`. Whether an entry is created or updated is decided from the
- *   entries at `parentSha`, so that GitLab also rejects creating an entry that was created concurrently.
+ * - Each updated or deleted entry file and a written schema file are sent with `lastCommitId` set to `parentSha`, so
+ *   that GitLab itself rejects the commit if the file was changed after `parentSha`. Whether an entry is created or
+ *   updated is decided from the entries at `parentSha`, so that GitLab also rejects creating an entry that was created
+ *   concurrently.
  * - If GitLab rejects the commit and the branch has moved since `parentSha`, `CONFLICT` is thrown.
  * Commits by others between the head check and the commit that change entry files not written by this commit are not
  * detected, e.g. the deletion of an entry that this commit references.
@@ -274,6 +275,17 @@ export async function createCommit(
     commitDraft.parentSha,
     pathEntryFolder,
   )
+  if (commitDraft.schema !== undefined) {
+    // the schema file exists in every usable repository, as reads require it
+    actions.push(
+      new ActionModel(
+        'UPDATE',
+        commitDraft.schema,
+        getPathSchema(gitRepositoryOptions),
+        commitDraft.parentSha,
+      ),
+    )
+  }
 
   const mutateCommit = createCommitMutation()
   const response: any = await axiosCacheInstance.post(
