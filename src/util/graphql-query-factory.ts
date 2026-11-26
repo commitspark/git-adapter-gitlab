@@ -4,6 +4,9 @@ export function createBlobQuery(): string {
         project(fullPath: $projectFullPath) {
           name
           repository {
+            commit(ref: $ref) {
+              sha
+            }
             tree(ref: $ref, path: $path, recursive: true) {
               blobs(after: $after) {
                 nodes {
@@ -29,6 +32,9 @@ export function createBlobContentQuery(): string {
         project(fullPath: $projectFullPath) {
           name
           repository {
+            commit(ref: $ref) {
+              sha
+            }
             blobs (ref: $ref, paths: $paths, after: $after) {
               nodes {
                 path

@@ -1,5 +1,5 @@
 import { AxiosCacheInstance } from 'axios-cache-interceptor'
-import { AxiosResponse } from 'axios'
+import { AxiosError, AxiosResponse } from 'axios'
 import { ErrorCode } from '@commitspark/git-adapter'
 import {
   createCommit,
@@ -27,6 +27,7 @@ describe('Entries', () => {
         data: {
           project: {
             repository: {
+              commit: { sha: 'abc123' },
               tree: {
                 blobs: {
                   nodes,
@@ -48,6 +49,7 @@ describe('Entries', () => {
         data: {
           project: {
             repository: {
+              commit: { sha: 'abc123' },
               blobs: {
                 nodes,
                 pageInfo: { hasNextPage: endCursor !== null, endCursor },
@@ -475,5 +477,140 @@ describe('Entries', () => {
       ).rejects.toMatchObject({ code: ErrorCode.BAD_REQUEST })
       expect(mockAxiosInstance.post).not.toHaveBeenCalled()
     })
+  })
+
+  describe('error reporting', () => {
+    const repositoryResponse = (repository: unknown) =>
+      ({
+        data: { data: { project: { repository } } },
+      }) as Partial<AxiosResponse> as AxiosResponse
+
+    it('should report an unknown commit as not found when listing entries', async () => {
+      mockAxiosInstance.post.mockResolvedValue(
+        repositoryResponse({
+          commit: null,
+          tree: {
+            blobs: {
+              nodes: [],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+        }),
+      )
+
+      await expect(
+        getEntryHashes(mockOptions, mockAxiosInstance, 'abc123'),
+      ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND })
+    })
+
+    it('should list no entries if the entry folder does not exist', async () => {
+      mockAxiosInstance.post.mockResolvedValue(
+        repositoryResponse({ commit: { sha: 'abc123' }, tree: null }),
+      )
+
+      await expect(
+        getEntryHashes(mockOptions, mockAxiosInstance, 'abc123'),
+      ).resolves.toEqual([])
+    })
+
+    it.each([
+      [
+        'getEntriesByIds',
+        () => getEntriesByIds(mockOptions, mockAxiosInstance, 'abc123', ['a']),
+      ],
+      ['getSchema', () => getSchema(mockOptions, mockAxiosInstance, 'abc123')],
+    ])(
+      'should report an unknown commit as not found in %s',
+      async (_name, call) => {
+        mockAxiosInstance.post.mockResolvedValue(
+          repositoryResponse({
+            commit: null,
+            blobs: {
+              nodes: [],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          }),
+        )
+
+        await expect(call()).rejects.toMatchObject({
+          code: ErrorCode.NOT_FOUND,
+          message:
+            'Commit "abc123" not found in GitLab project "group/project"',
+        })
+      },
+    )
+
+    it('should report a missing schema file as not found', async () => {
+      mockAxiosInstance.post.mockResolvedValue(blobsResponse([]))
+
+      await expect(
+        getSchema(mockOptions, mockAxiosInstance, 'abc123'),
+      ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND })
+    })
+
+    it.each([
+      ['a missing project', { data: { data: { project: null } } }],
+      [
+        'a repository that cannot be read',
+        { data: { data: { project: { repository: null } } } },
+      ],
+    ])('should report %s as not found', async (_description, response) => {
+      mockAxiosInstance.post.mockResolvedValue(
+        response as Partial<AxiosResponse> as AxiosResponse,
+      )
+
+      await expect(
+        getEntryHashes(mockOptions, mockAxiosInstance, 'abc123'),
+      ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND })
+      await expect(
+        getLatestCommitHash(mockOptions, mockAxiosInstance, 'main'),
+      ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND })
+    })
+
+    it.each([
+      [401, ErrorCode.UNAUTHORIZED],
+      [403, ErrorCode.FORBIDDEN],
+      [429, ErrorCode.TOO_MANY_REQUESTS],
+      [500, ErrorCode.INTERNAL_ERROR],
+    ])(
+      'should report a request failing with status %s with code %s',
+      async (status, code) => {
+        const axiosError = new AxiosError(`Status ${status}`)
+        axiosError.response = {
+          status,
+        } as Partial<AxiosResponse> as AxiosResponse
+        mockAxiosInstance.post.mockRejectedValue(axiosError)
+
+        await expect(
+          getEntriesByIds(mockOptions, mockAxiosInstance, 'abc123', ['a']),
+        ).rejects.toMatchObject({ code })
+      },
+    )
+
+    it.each([
+      ['invalid YAML', 'a: [\n', 'is no valid YAML'],
+      [
+        'YAML without a mapping',
+        'just text\n',
+        'does not contain a YAML mapping',
+      ],
+      ['an empty file', '', 'does not contain a YAML mapping'],
+    ])(
+      'should report an entry file with %s as invalid repository data',
+      async (_description, rawBlob, message) => {
+        mockAxiosInstance.post.mockResolvedValue(
+          blobsResponse([{ path: 'commitspark/entries/a.yaml', rawBlob }]),
+        )
+
+        await expect(
+          getEntriesByIds(mockOptions, mockAxiosInstance, 'abc123', ['a']),
+        ).rejects.toMatchObject({
+          code: ErrorCode.BAD_REPOSITORY_DATA,
+          message: expect.stringContaining(
+            `Entry file of entry "a" ${message}`,
+          ),
+        })
+      },
+    )
   })
 })
