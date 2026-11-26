@@ -564,12 +564,12 @@ describe('Entries', () => {
       },
     )
 
-    it('should report a missing schema file as not found', async () => {
+    it('should report a missing schema file as invalid repository data', async () => {
       mockAxiosInstance.post.mockResolvedValue(blobsResponse([]))
 
       await expect(
         getSchema(mockOptions, mockAxiosInstance, 'abc123'),
-      ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND })
+      ).rejects.toMatchObject({ code: ErrorCode.BAD_REPOSITORY_DATA })
     })
 
     it.each([

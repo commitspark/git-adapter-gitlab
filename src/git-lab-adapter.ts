@@ -213,9 +213,10 @@ export async function getSchema(
     [schemaFilePath],
   )
 
+  // an unknown commit is reported as not found by getBlobContents()
   if (blobs.length === 0) {
     throw new GitAdapterError(
-      ErrorCode.NOT_FOUND,
+      ErrorCode.BAD_REPOSITORY_DATA,
       `"${schemaFilePath}" not found in Git repository "${projectPath}" at commit "${commitHash}"`,
     )
   }

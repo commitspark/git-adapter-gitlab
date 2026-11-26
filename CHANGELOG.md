@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Report an unknown commit with error code `NOT_FOUND` instead of returning no entries or no schema, so that callers do
   not cache an empty state for a commit that is pushed later
-- Report a missing schema file with `NOT_FOUND`, entry files with invalid YAML or without a YAML mapping with
+- Report a missing schema file and entry files with invalid YAML or without a YAML mapping with
   `BAD_REPOSITORY_DATA`, a project or repository that cannot be read with `NOT_FOUND`, and failed requests with the
   error code of the HTTP status, e.g. `UNAUTHORIZED`, instead of unhandled errors, as required by the adapter contract
 - Compare the parent commit with the head of the branch instead of a tag of the same name, so that such a tag causes
