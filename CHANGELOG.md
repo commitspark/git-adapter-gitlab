@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Resolve a name that is both a branch name and a tag name to the branch instead of to the tag, as required by the
   adapter contract, so that reads and commits through that name use the same branch
+- Remove the HTTP response cache, which never served a cached response because GitLab marks its API responses as
+  expired, so that results do not depend on GitLab's cache headers
 
 ### Fixed
 

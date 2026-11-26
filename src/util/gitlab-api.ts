@@ -1,5 +1,4 @@
-import { AxiosError } from 'axios'
-import { AxiosCacheInstance, CacheProperties } from 'axios-cache-interceptor'
+import { AxiosError, AxiosInstance } from 'axios'
 import { ErrorCode, GitAdapterError } from '@commitspark/git-adapter'
 import { GitLabRepositoryOptions } from '../index.ts'
 
@@ -19,18 +18,16 @@ const httpStatusErrorCodes: Record<number, ErrorCode> = {
  */
 export async function postGraphQL<T>(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   query: string,
   variables: Record<string, unknown>,
-  cache?: false | Partial<CacheProperties>,
 ): Promise<T> {
   let response
   try {
-    response = await axiosCacheInstance.post<{ data?: T; errors?: unknown }>(
+    response = await axiosInstance.post<{ data?: T; errors?: unknown }>(
       GITLAB_GRAPHQL_API_URL,
       { query, variables },
       {
-        ...(cache !== undefined ? { cache } : {}),
         headers: { authorization: `Bearer ${gitRepositoryOptions.token}` },
       },
     )

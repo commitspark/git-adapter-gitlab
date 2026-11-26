@@ -17,7 +17,7 @@ import {
 import { convertEntriesToActions } from './util/entries-to-actions-converter.ts'
 import { ActionModel } from './model/action.model.ts'
 import { parse } from 'yaml'
-import { AxiosCacheInstance } from 'axios-cache-interceptor'
+import { AxiosInstance } from 'axios'
 import { GitLabRepositoryOptions } from './index.ts'
 import {
   getEntryIdFromPath,
@@ -66,7 +66,7 @@ async function fetchAllNodes<T>(
 
 export async function getEntryHashes(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitHash: string,
 ): Promise<EntryHash[]> {
   const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
@@ -86,7 +86,7 @@ export async function getEntryHashes(
             blobs: Connection<{ path: string; sha: string; mode: string }>
           } | null
         }>
-      >(gitRepositoryOptions, axiosCacheInstance, queryBlobs, {
+      >(gitRepositoryOptions, axiosInstance, queryBlobs, {
         projectFullPath: gitRepositoryOptions.projectPath,
         ref: commitHash,
         path: pathEntryFolder,
@@ -114,7 +114,7 @@ export async function getEntryHashes(
 
 async function getBlobContents(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitHash: string,
   paths: string[],
 ): Promise<{ path: string; rawBlob: string }[]> {
@@ -132,7 +132,7 @@ async function getBlobContents(
                 commit: { sha: string } | null
                 blobs: Connection<{ path: string; rawBlob: string }>
               }>
-            >(gitRepositoryOptions, axiosCacheInstance, queryContent, {
+            >(gitRepositoryOptions, axiosInstance, queryContent, {
               projectFullPath: gitRepositoryOptions.projectPath,
               ref: commitHash,
               paths: batchPaths,
@@ -150,7 +150,7 @@ async function getBlobContents(
 
 export async function getEntriesByIds(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitHash: string,
   ids: string[],
 ): Promise<Entry[]> {
@@ -161,7 +161,7 @@ export async function getEntriesByIds(
 
   const blobs = await getBlobContents(
     gitRepositoryOptions,
-    axiosCacheInstance,
+    axiosInstance,
     commitHash,
     ids.map((id) => getPathEntry(gitRepositoryOptions, id)),
   )
@@ -200,7 +200,7 @@ const parseEntry = (id: string, fileContent: string): Entry => {
 
 export async function getSchema(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitHash: string,
 ): Promise<string> {
   const projectPath = gitRepositoryOptions.projectPath
@@ -208,7 +208,7 @@ export async function getSchema(
 
   const blobs = await getBlobContents(
     gitRepositoryOptions,
-    axiosCacheInstance,
+    axiosInstance,
     commitHash,
     [schemaFilePath],
   )
@@ -225,7 +225,7 @@ export async function getSchema(
 
 export async function getLatestCommitHash(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   ref: string,
 ): Promise<string> {
   const repository = getRepository(
@@ -235,17 +235,11 @@ export async function getLatestCommitHash(
         branch: { sha: string } | null
         commit: { sha: string } | null
       }>
-    >(
-      gitRepositoryOptions,
-      axiosCacheInstance,
-      createLatestCommitQuery(),
-      {
-        projectFullPath: gitRepositoryOptions.projectPath,
-        ref: ref,
-        branchRef: `refs/heads/${ref}`,
-      },
-      false, // must not use cache, so we always get the branch's current head
-    ),
+    >(gitRepositoryOptions, axiosInstance, createLatestCommitQuery(), {
+      projectFullPath: gitRepositoryOptions.projectPath,
+      ref: ref,
+      branchRef: `refs/heads/${ref}`,
+    }),
   )
 
   // a branch takes precedence over a tag of the same name, unlike in GitLab's ref lookup
@@ -274,7 +268,7 @@ export async function getLatestCommitHash(
  */
 export async function createCommit(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitDraft: CommitDraft,
 ): Promise<Commit> {
   commitDraft.entries.forEach((entryDraft) => validateEntryId(entryDraft.id))
@@ -282,13 +276,13 @@ export async function createCommit(
 
   await assertBranchHasNotMoved(
     gitRepositoryOptions,
-    axiosCacheInstance,
+    axiosInstance,
     commitDraft,
   )
 
   const parentEntryHashes = await getEntryHashes(
     gitRepositoryOptions,
-    axiosCacheInstance,
+    axiosInstance,
     commitDraft.parentSha,
   )
   const existingIdMap = new Map<string, boolean>()
@@ -316,28 +310,22 @@ export async function createCommit(
 
   const { commitCreate: mutationResult } = await postGraphQL<{
     commitCreate: { commit: { sha: string } | null; errors: string[] }
-  }>(
-    gitRepositoryOptions,
-    axiosCacheInstance,
-    createCommitMutation(),
-    {
-      actions,
-      branch: commitDraft.ref, // if `ref` is a hash and not a branch, commits are rejected by GitLab
-      // GitLab takes a single Git commit message, in which a blank line separates the body
-      message:
-        commitDraft.body === undefined
-          ? commitDraft.message
-          : `${commitDraft.message}\n\n${commitDraft.body}`,
-      projectPath: gitRepositoryOptions.projectPath,
-    },
-    false,
-  )
+  }>(gitRepositoryOptions, axiosInstance, createCommitMutation(), {
+    actions,
+    branch: commitDraft.ref, // if `ref` is a hash and not a branch, commits are rejected by GitLab
+    // GitLab takes a single Git commit message, in which a blank line separates the body
+    message:
+      commitDraft.body === undefined
+        ? commitDraft.message
+        : `${commitDraft.message}\n\n${commitDraft.body}`,
+    projectPath: gitRepositoryOptions.projectPath,
+  })
   if (mutationResult.errors.length > 0) {
     // rejections due to concurrent changes are detected by the branch having moved instead of by GitLab's error
     // messages, which are not part of its API contract
     await assertBranchHasNotMoved(
       gitRepositoryOptions,
-      axiosCacheInstance,
+      axiosInstance,
       commitDraft,
     )
     throw new GitAdapterError(
@@ -351,13 +339,13 @@ export async function createCommit(
 
 async function assertBranchHasNotMoved(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitDraft: CommitDraft,
 ): Promise<void> {
   // the fully qualified name resolves the branch even if a tag has the same name, as GitLab resolves the tag otherwise
   const headCommitHash = await getLatestCommitHash(
     gitRepositoryOptions,
-    axiosCacheInstance,
+    axiosInstance,
     `refs/heads/${commitDraft.ref}`,
   )
   if (headCommitHash !== commitDraft.parentSha) {

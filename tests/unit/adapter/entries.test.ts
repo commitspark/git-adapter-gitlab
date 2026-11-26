@@ -1,5 +1,4 @@
-import { AxiosCacheInstance } from 'axios-cache-interceptor'
-import { AxiosError, AxiosResponse } from 'axios'
+import { AxiosError, AxiosInstance, AxiosResponse } from 'axios'
 import { ErrorCode } from '@commitspark/git-adapter'
 import {
   createCommit,
@@ -16,7 +15,7 @@ describe('Entries', () => {
     token: 'test-token',
   }
 
-  let mockAxiosInstance: jest.Mocked<AxiosCacheInstance>
+  let mockAxiosInstance: jest.Mocked<AxiosInstance>
 
   const treeResponse = (
     nodes: { path: string; sha: string; mode: string }[],
@@ -70,7 +69,7 @@ describe('Entries', () => {
   beforeEach(() => {
     mockAxiosInstance = {
       post: jest.fn(),
-    } as unknown as jest.Mocked<AxiosCacheInstance>
+    } as unknown as jest.Mocked<AxiosInstance>
   })
 
   describe('getEntryHashes', () => {

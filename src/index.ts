@@ -1,6 +1,5 @@
 import { GitAdapter } from '@commitspark/git-adapter'
 import axios from 'axios'
-import { setupCache } from 'axios-cache-interceptor'
 import {
   createCommit as createCommitFn,
   getEntriesByIds as getEntriesByIdsFn,
@@ -16,29 +15,24 @@ export interface GitLabRepositoryOptions {
   pathEntryFolder?: string
 }
 
-const QUERY_CACHE_SECONDS = 10 * 60
-
 export function createAdapter(options: GitLabRepositoryOptions): GitAdapter {
-  const axiosCacheInstance = setupCache(axios.create(), {
-    ttl: QUERY_CACHE_SECONDS * 1000,
-    methods: ['get', 'post'],
-  })
+  const axiosInstance = axios.create()
 
   return {
     async getEntryHashes(commitHash: string) {
-      return getEntryHashesFn(options, axiosCacheInstance, commitHash)
+      return getEntryHashesFn(options, axiosInstance, commitHash)
     },
     async getEntriesByIds(commitHash: string, ids: string[]) {
-      return getEntriesByIdsFn(options, axiosCacheInstance, commitHash, ids)
+      return getEntriesByIdsFn(options, axiosInstance, commitHash, ids)
     },
     async getSchema(commitHash: string) {
-      return getSchemaFn(options, axiosCacheInstance, commitHash)
+      return getSchemaFn(options, axiosInstance, commitHash)
     },
     async getLatestCommitHash(ref: string) {
-      return getLatestCommitHashFn(options, axiosCacheInstance, ref)
+      return getLatestCommitHashFn(options, axiosInstance, ref)
     },
     async createCommit(commitDraft) {
-      return createCommitFn(options, axiosCacheInstance, commitDraft)
+      return createCommitFn(options, axiosInstance, commitDraft)
     },
   }
 }
