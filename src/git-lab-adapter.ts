@@ -344,10 +344,11 @@ async function assertBranchHasNotMoved(
   axiosCacheInstance: AxiosCacheInstance,
   commitDraft: CommitDraft,
 ): Promise<void> {
+  // the fully qualified name resolves the branch even if a tag has the same name, as GitLab resolves the tag otherwise
   const headCommitHash = await getLatestCommitHash(
     gitRepositoryOptions,
     axiosCacheInstance,
-    commitDraft.ref,
+    `refs/heads/${commitDraft.ref}`,
   )
   if (headCommitHash !== commitDraft.parentSha) {
     throw new GitAdapterError(

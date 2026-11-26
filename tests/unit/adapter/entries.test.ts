@@ -337,6 +337,8 @@ describe('Entries', () => {
         createCommit(mockOptions, mockAxiosInstance, commitDraft),
       ).resolves.toEqual({ commitHash: 'new123' })
 
+      // the head is resolved as branch, also if a tag has the same name
+      expect(postedVariables(0)).toMatchObject({ ref: 'refs/heads/main' })
       expect(postedVariables(1)).toMatchObject({ ref: 'parent123' })
       expect(postedVariables(2)).toMatchObject({
         branch: 'main',

@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Report a missing schema file with `NOT_FOUND`, entry files with invalid YAML or without a YAML mapping with
   `BAD_REPOSITORY_DATA`, a project or repository that cannot be read with `NOT_FOUND`, and failed requests with the
   error code of the HTTP status, e.g. `UNAUTHORIZED`, instead of unhandled errors, as required by the adapter contract
+- Compare the parent commit with the head of the branch instead of a tag of the same name, so that such a tag causes
+  no `CONFLICT` that a retry cannot resolve
 
 ## [2.0.0-beta.3] - 2026-11-11
 

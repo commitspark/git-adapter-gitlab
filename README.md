@@ -46,6 +46,8 @@ window are not detected. For example, if one writer deletes entry `B` while anot
 `A` that references `B`, both commits can succeed and leave `A` with a reference to a non-existent entry. Lost updates
 of the written entries themselves cannot occur.
 
+GitLab rejects commits to a branch that has the same name as a tag, so such commits fail with `BAD_REQUEST`.
+
 # Example
 
 To use this adapter together with the Commitspark GraphQL API library, your code could be the following:
