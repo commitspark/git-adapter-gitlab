@@ -17,7 +17,7 @@ import {
 import { convertEntriesToActions } from './util/entries-to-actions-converter.ts'
 import { ActionModel } from './model/action.model.ts'
 import { parse } from 'yaml'
-import { AxiosCacheInstance } from 'axios-cache-interceptor'
+import { AxiosInstance } from 'axios'
 import { GitLabRepositoryOptions } from './index.ts'
 import {
   getEntryIdFromPath,
@@ -26,6 +26,12 @@ import {
   getPathSchema,
 } from './util/path-factory.ts'
 import { ENTRY_EXTENSION } from './util/types.ts'
+import {
+  assertCommitFound,
+  getRepository,
+  postGraphQL,
+  ProjectResponse,
+} from './util/gitlab-api.ts'
 
 // symbolic links are stored as blobs, but are not files
 const SYMBOLIC_LINK_MODE = '120000'
@@ -36,6 +42,11 @@ const BLOB_PATHS_BATCH_SIZE = 50
 interface Connection<T> {
   nodes: T[]
   pageInfo: { hasNextPage: boolean; endCursor: string | null }
+}
+
+const EMPTY_CONNECTION: Connection<never> = {
+  nodes: [],
+  pageInfo: { hasNextPage: false, endCursor: null },
 }
 
 async function fetchAllNodes<T>(
@@ -55,11 +66,9 @@ async function fetchAllNodes<T>(
 
 export async function getEntryHashes(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitHash: string,
 ): Promise<EntryHash[]> {
-  const projectPath = gitRepositoryOptions.projectPath
-  const token = gitRepositoryOptions.token
   const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
 
   const queryBlobs = createBlobQuery()
@@ -68,24 +77,25 @@ export async function getEntryHashes(
     sha: string
     mode: string
   }>(async (after) => {
-    const filesResponse = await axiosCacheInstance.post(
-      'https://gitlab.com/api/graphql',
-      {
-        query: queryBlobs,
-        variables: {
-          projectFullPath: projectPath,
-          ref: commitHash,
-          path: pathEntryFolder,
-          after: after,
-        },
-      },
-      {
-        headers: {
-          authorization: `Bearer ${token}`,
-        },
-      },
+    const repository = getRepository(
+      gitRepositoryOptions,
+      await postGraphQL<
+        ProjectResponse<{
+          commit: { sha: string } | null
+          tree: {
+            blobs: Connection<{ path: string; sha: string; mode: string }>
+          } | null
+        }>
+      >(gitRepositoryOptions, axiosInstance, queryBlobs, {
+        projectFullPath: gitRepositoryOptions.projectPath,
+        ref: commitHash,
+        path: pathEntryFolder,
+        after: after,
+      }),
     )
-    return filesResponse.data.data.project.repository.tree.blobs
+    assertCommitFound(gitRepositoryOptions, repository.commit, commitHash)
+    // GitLab returns no tree if the entry folder does not exist
+    return repository.tree?.blobs ?? EMPTY_CONNECTION
   })
 
   return blobs
@@ -104,7 +114,7 @@ export async function getEntryHashes(
 
 async function getBlobContents(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitHash: string,
   paths: string[],
 ): Promise<{ path: string; rawBlob: string }[]> {
@@ -115,24 +125,22 @@ async function getBlobContents(
     blobs.push(
       ...(await fetchAllNodes<{ path: string; rawBlob: string }>(
         async (after) => {
-          const contentResponse = await axiosCacheInstance.post(
-            'https://gitlab.com/api/graphql',
-            {
-              query: queryContent,
-              variables: {
-                projectFullPath: gitRepositoryOptions.projectPath,
-                ref: commitHash,
-                paths: batchPaths,
-                after: after,
-              },
-            },
-            {
-              headers: {
-                authorization: `Bearer ${gitRepositoryOptions.token}`,
-              },
-            },
+          const repository = getRepository(
+            gitRepositoryOptions,
+            await postGraphQL<
+              ProjectResponse<{
+                commit: { sha: string } | null
+                blobs: Connection<{ path: string; rawBlob: string }>
+              }>
+            >(gitRepositoryOptions, axiosInstance, queryContent, {
+              projectFullPath: gitRepositoryOptions.projectPath,
+              ref: commitHash,
+              paths: batchPaths,
+              after: after,
+            }),
           )
-          return contentResponse.data.data.project.repository.blobs
+          assertCommitFound(gitRepositoryOptions, repository.commit, commitHash)
+          return repository.blobs
         },
       )),
     )
@@ -142,7 +150,7 @@ async function getBlobContents(
 
 export async function getEntriesByIds(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitHash: string,
   ids: string[],
 ): Promise<Entry[]> {
@@ -153,24 +161,46 @@ export async function getEntriesByIds(
 
   const blobs = await getBlobContents(
     gitRepositoryOptions,
-    axiosCacheInstance,
+    axiosInstance,
     commitHash,
     ids.map((id) => getPathEntry(gitRepositoryOptions, id)),
   )
 
-  return blobs.map((blob) => {
-    const content = parse(blob.rawBlob)
-    return {
-      id: getEntryIdFromPath(gitRepositoryOptions, blob.path),
-      metadata: content.metadata,
-      data: content.data,
-    } as Entry
-  })
+  return blobs.map((blob) =>
+    parseEntry(
+      getEntryIdFromPath(gitRepositoryOptions, blob.path),
+      blob.rawBlob,
+    ),
+  )
+}
+
+const parseEntry = (id: string, fileContent: string): Entry => {
+  let content: unknown
+  try {
+    content = parse(fileContent)
+  } catch (error) {
+    throw new GitAdapterError(
+      ErrorCode.BAD_REPOSITORY_DATA,
+      `Entry file of entry "${id}" is no valid YAML: ${(error as Error).message}`,
+    )
+  }
+  if (
+    typeof content !== 'object' ||
+    content === null ||
+    Array.isArray(content)
+  ) {
+    throw new GitAdapterError(
+      ErrorCode.BAD_REPOSITORY_DATA,
+      `Entry file of entry "${id}" does not contain a YAML mapping`,
+    )
+  }
+  const { metadata, data } = content as Pick<Entry, 'metadata' | 'data'>
+  return { id: id, metadata: metadata, data: data }
 }
 
 export async function getSchema(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitHash: string,
 ): Promise<string> {
   const projectPath = gitRepositoryOptions.projectPath
@@ -178,13 +208,14 @@ export async function getSchema(
 
   const blobs = await getBlobContents(
     gitRepositoryOptions,
-    axiosCacheInstance,
+    axiosInstance,
     commitHash,
     [schemaFilePath],
   )
 
   if (blobs.length === 0) {
-    throw new Error(
+    throw new GitAdapterError(
+      ErrorCode.NOT_FOUND,
       `"${schemaFilePath}" not found in Git repository "${projectPath}" at commit "${commitHash}"`,
     )
   }
@@ -194,33 +225,25 @@ export async function getSchema(
 
 export async function getLatestCommitHash(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   ref: string,
 ): Promise<string> {
-  const projectPath = gitRepositoryOptions.projectPath
-  const token = gitRepositoryOptions.token
-
-  const queryLatestCommit = createLatestCommitQuery()
-
-  const response = await axiosCacheInstance.post(
-    'https://gitlab.com/api/graphql',
-    {
-      query: queryLatestCommit,
-      variables: {
-        projectFullPath: projectPath,
-        ref: ref,
-      },
-    },
-    {
-      cache: false, // must not use cache, so we always get the branch's current head
-      headers: {
-        authorization: `Bearer ${token}`,
-      },
-    },
+  const repository = getRepository(
+    gitRepositoryOptions,
+    await postGraphQL<
+      ProjectResponse<{
+        branch: { sha: string } | null
+        commit: { sha: string } | null
+      }>
+    >(gitRepositoryOptions, axiosInstance, createLatestCommitQuery(), {
+      projectFullPath: gitRepositoryOptions.projectPath,
+      ref: ref,
+      branchRef: `refs/heads/${ref}`,
+    }),
   )
 
-  // the commit the ref points to
-  const commit = response.data.data?.project?.repository?.commit
+  // a branch takes precedence over a tag of the same name, unlike in GitLab's ref lookup
+  const commit = repository.branch ?? repository.commit
   if (!commit) {
     throw new GitAdapterError(
       ErrorCode.NOT_FOUND,
@@ -245,23 +268,21 @@ export async function getLatestCommitHash(
  */
 export async function createCommit(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitDraft: CommitDraft,
 ): Promise<Commit> {
   commitDraft.entries.forEach((entryDraft) => validateEntryId(entryDraft.id))
-  const projectPath = gitRepositoryOptions.projectPath
-  const token = gitRepositoryOptions.token
   const pathEntryFolder = getPathEntryFolder(gitRepositoryOptions)
 
   await assertBranchHasNotMoved(
     gitRepositoryOptions,
-    axiosCacheInstance,
+    axiosInstance,
     commitDraft,
   )
 
   const parentEntryHashes = await getEntryHashes(
     gitRepositoryOptions,
-    axiosCacheInstance,
+    axiosInstance,
     commitDraft.parentSha,
   )
   const existingIdMap = new Map<string, boolean>()
@@ -287,44 +308,24 @@ export async function createCommit(
     )
   }
 
-  const mutateCommit = createCommitMutation()
-  const response: any = await axiosCacheInstance.post(
-    'https://gitlab.com/api/graphql',
-    {
-      query: mutateCommit,
-      variables: {
-        actions,
-        branch: commitDraft.ref, // if `ref` is a hash and not a branch, commits are rejected by GitLab
-        // GitLab takes a single Git commit message, in which a blank line separates the body
-        message:
-          commitDraft.body === undefined
-            ? commitDraft.message
-            : `${commitDraft.message}\n\n${commitDraft.body}`,
-        projectPath: projectPath,
-      },
-    },
-    {
-      cache: false,
-      headers: {
-        authorization: `Bearer ${token}`,
-      },
-    },
-  )
-
-  if (response.data.errors) {
-    throw new GitAdapterError(
-      ErrorCode.INTERNAL_ERROR,
-      `Failed to create commit: ${JSON.stringify(response.data.errors)}`,
-    )
-  }
-
-  const mutationResult = response.data.data.commitCreate
+  const { commitCreate: mutationResult } = await postGraphQL<{
+    commitCreate: { commit: { sha: string } | null; errors: string[] }
+  }>(gitRepositoryOptions, axiosInstance, createCommitMutation(), {
+    actions,
+    branch: commitDraft.ref, // if `ref` is a hash and not a branch, commits are rejected by GitLab
+    // GitLab takes a single Git commit message, in which a blank line separates the body
+    message:
+      commitDraft.body === undefined
+        ? commitDraft.message
+        : `${commitDraft.message}\n\n${commitDraft.body}`,
+    projectPath: gitRepositoryOptions.projectPath,
+  })
   if (mutationResult.errors.length > 0) {
     // rejections due to concurrent changes are detected by the branch having moved instead of by GitLab's error
     // messages, which are not part of its API contract
     await assertBranchHasNotMoved(
       gitRepositoryOptions,
-      axiosCacheInstance,
+      axiosInstance,
       commitDraft,
     )
     throw new GitAdapterError(
@@ -333,18 +334,19 @@ export async function createCommit(
     )
   }
 
-  return { commitHash: mutationResult.commit.sha }
+  return { commitHash: (mutationResult.commit as { sha: string }).sha }
 }
 
 async function assertBranchHasNotMoved(
   gitRepositoryOptions: GitLabRepositoryOptions,
-  axiosCacheInstance: AxiosCacheInstance,
+  axiosInstance: AxiosInstance,
   commitDraft: CommitDraft,
 ): Promise<void> {
+  // the fully qualified name resolves the branch even if a tag has the same name, as GitLab resolves the tag otherwise
   const headCommitHash = await getLatestCommitHash(
     gitRepositoryOptions,
-    axiosCacheInstance,
-    commitDraft.ref,
+    axiosInstance,
+    `refs/heads/${commitDraft.ref}`,
   )
   if (headCommitHash !== commitDraft.parentSha) {
     throw new GitAdapterError(

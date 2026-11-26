@@ -12,6 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Write field `schema` of a commit draft to the schema file in the same commit as the entries, so that schema and
   entries can be changed together
 
+### Changed
+
+- Resolve a name that is both a branch name and a tag name to the branch instead of to the tag, as required by the
+  adapter contract, so that reads and commits through that name use the same branch
+- Remove the HTTP response cache, which never served a cached response because GitLab marks its API responses as
+  expired, so that results do not depend on GitLab's cache headers
+
+### Fixed
+
+- Report an unknown commit with error code `NOT_FOUND` instead of returning no entries or no schema, so that callers do
+  not cache an empty state for a commit that is pushed later
+- Report a missing schema file with `NOT_FOUND`, entry files with invalid YAML or without a YAML mapping with
+  `BAD_REPOSITORY_DATA`, a project or repository that cannot be read with `NOT_FOUND`, and failed requests with the
+  error code of the HTTP status, e.g. `UNAUTHORIZED`, instead of unhandled errors, as required by the adapter contract
+- Compare the parent commit with the head of the branch instead of a tag of the same name, so that such a tag causes
+  no `CONFLICT` that a retry cannot resolve
+
 ## [2.0.0-beta.3] - 2026-11-11
 
 ### Added
