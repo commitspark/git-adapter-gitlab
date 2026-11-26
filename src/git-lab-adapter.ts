@@ -230,24 +230,34 @@ export async function getLatestCommitHash(
 ): Promise<string> {
   const repository = getRepository(
     gitRepositoryOptions,
-    await postGraphQL<ProjectResponse<{ commit: { sha: string } | null }>>(
+    await postGraphQL<
+      ProjectResponse<{
+        branch: { sha: string } | null
+        commit: { sha: string } | null
+      }>
+    >(
       gitRepositoryOptions,
       axiosCacheInstance,
       createLatestCommitQuery(),
-      { projectFullPath: gitRepositoryOptions.projectPath, ref: ref },
+      {
+        projectFullPath: gitRepositoryOptions.projectPath,
+        ref: ref,
+        branchRef: `refs/heads/${ref}`,
+      },
       false, // must not use cache, so we always get the branch's current head
     ),
   )
 
-  // the commit the ref points to
-  if (!repository.commit) {
+  // a branch takes precedence over a tag of the same name, unlike in GitLab's ref lookup
+  const commit = repository.branch ?? repository.commit
+  if (!commit) {
     throw new GitAdapterError(
       ErrorCode.NOT_FOUND,
       `No commit found for ref "${ref}"`,
     )
   }
 
-  return repository.commit.sha
+  return commit.sha
 }
 
 /**

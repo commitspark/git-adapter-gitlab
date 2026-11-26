@@ -70,10 +70,13 @@ export function createCommitMutation(): string {
 }
 
 export function createLatestCommitQuery(): string {
-  return `query Content ($projectFullPath: ID!, $ref: String!) {
+  return `query Content ($projectFullPath: ID!, $ref: String!, $branchRef: String!) {
         project(fullPath: $projectFullPath) {
           name
           repository {
+            branch: commit(ref: $branchRef) {
+              sha
+            }
             commit(ref: $ref) {
               sha
             }

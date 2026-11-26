@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Write field `schema` of a commit draft to the schema file in the same commit as the entries, so that schema and
   entries can be changed together
 
+### Changed
+
+- Resolve a name that is both a branch name and a tag name to the branch instead of to the tag, as required by the
+  adapter contract, so that reads and commits through that name use the same branch
+
 ### Fixed
 
 - Report an unknown commit with error code `NOT_FOUND` instead of returning no entries or no schema, so that callers do

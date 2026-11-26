@@ -287,6 +287,29 @@ describe('Entries', () => {
       expect(postedVariables(0)).toMatchObject({ ref: 'main' })
     })
 
+    it('should resolve a name used by both a branch and a tag to the branch', async () => {
+      mockAxiosInstance.post.mockResolvedValue({
+        data: {
+          data: {
+            project: {
+              repository: {
+                branch: { sha: 'branch-commit' },
+                commit: { sha: 'tag-commit' },
+              },
+            },
+          },
+        },
+      } as Partial<AxiosResponse> as AxiosResponse)
+
+      await expect(
+        getLatestCommitHash(mockOptions, mockAxiosInstance, 'same'),
+      ).resolves.toBe('branch-commit')
+      expect(postedVariables(0)).toMatchObject({
+        ref: 'same',
+        branchRef: 'refs/heads/same',
+      })
+    })
+
     it('should throw GitAdapterError with NOT_FOUND when the ref does not exist', async () => {
       mockAxiosInstance.post.mockResolvedValue(headResponse(null))
 
